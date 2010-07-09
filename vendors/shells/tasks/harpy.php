@@ -19,11 +19,11 @@ class HarpyTask extends Shell{
     var $email_regix = "/([_\w\.\-\"]+@[_0-9a-zA-Z\.\-]+\.[a-zA-Z]+)/";
     
     // Mail_mimeDecodeのデコードの設定
-    var $params = array(
-            'include_bodies' => true,
-            'decode_bodies' => true,
-            'decode_headers' => true,
-            );
+    var $mailMimeDecodeParams = array(
+        'include_bodies' => true,
+        'decode_bodies' => true,
+        'decode_headers' => true,
+        );
     
 
     function _welcome(){
@@ -46,6 +46,9 @@ class HarpyTask extends Shell{
     function execute(){
         ini_set('memory_limit',-1);
         
+        // 前処理
+        $this->beforefilter();
+        
         // メールの読み込み
         $source = file_get_contents("php://stdin");
         if(empty($source)){
@@ -56,8 +59,9 @@ class HarpyTask extends Shell{
         $this->hookMail($source);
         
         // メールをデコード
+        //$this->out($this->params2);
         $Decoder = new Mail_mimeDecode($source);
-        $mail = $Decoder->decode($this->params);
+        $mail = $Decoder->decode($this->mailMimeDecodeParams);
         
         // Fromを取得
         $from = $this->_parseAddress($mail, 'from');
@@ -65,6 +69,11 @@ class HarpyTask extends Shell{
         // Toを取得
         $to = $this->_parseAddress($mail, 'to');
         $this->hookToAddress($to);
+        
+        // 本文・添付等をパース
+        $this->_parseBody($mail);
+        
+        $this->afterfilter();
         
         // Toを取得
         /*$to = $this->_getTo($mail);
@@ -93,6 +102,66 @@ class HarpyTask extends Shell{
         return $from;
     }
     
+    function _parseBody($mail) {
+        if (strtolower($mail->ctype_primary) == "multipart") {
+            //複数本文があるメール（本文を１件づつ処理する）
+            foreach ($mail->parts as $part) {
+                //タイプ
+                if (@$part->disposition=="attachment") {
+                    //添付ファイル
+                    $type = strtolower($part->ctype_primary)."/".strtolower($part->ctype_secondary);
+                    $name = $this->_getFileName($part);
+                    $this->hookAttachment($part->body, $name, $type);
+                } else {
+                    switch (strtolower($part->ctype_primary)) {
+                        case "image": //HTML本文中の画像                            
+                            $type = strtolower($part->ctype_primary)."/".strtolower($part->ctype_secondary);
+                            $name = $this->_getFileName($part);
+                            $this->hookAttachment($part->body, $name, $type);
+                            break;
+                        case "text": //テキスト本文の抽出
+                            /*if ($part->ctype_secondary=="plain") {
+                                $ary['body'] = trim(mb_convert_encoding($part->body, mb_internal_encoding(), mb_detect_order()));
+                            } else { //HTML本文
+                                $ary['body'] = trim(mb_convert_encoding($part->body, mb_internal_encoding(), mb_detect_order()));
+                            }*/
+                            $body = trim(mb_convert_encoding($part->body, 'UTF-8', mb_detect_order()));
+                            $this->hookBody($body);
+                            break;
+                        case "multipart": //マルチパートの中にマルチパートがある場合（MS-OutlookExpressからHTML形式で送信した場合）
+                            // 動くのか未確認
+                            $this->_parseBody($part);
+                            break;
+                    }
+                }
+            }
+        } elseif (strtolower($mail->ctype_primary) == "text") {
+            //テキスト本文のみのメール            
+            $body = trim(mb_convert_encoding($mail->body, 'UTF-8', mb_detect_order()));
+            $this->hookBody($body);
+        }
+
+        return ;
+    }
+    
+    /**
+     * ファイル名を取得する
+     * 
+     * @access private
+     * @author sakuragawa
+     */
+    private function _getFileName($part){
+        if(empty($part->ctype_parameters['name'])){
+            return "";
+        }
+        
+        // 日本語ファイル名に対応するために変換をかける
+        $fileName = urldecode($part->ctype_parameters['name']);
+        $enc = $this->_getCharset($fileName);
+        $fileName = mb_convert_encoding($fileName, 'UTF-8', $enc);
+        return $fileName;
+    }
+   
     /**
      * エンコードチェック
      * ヘッダでのSJIS使用は、スパムっぽいのでチェック
@@ -115,10 +184,18 @@ class HarpyTask extends Shell{
     //--------------------------------------------------------------------
     // Hook用メソッド一覧
     //--------------------------------------------------------------------
+    function beforefilter(){
+    }
+    function afterfilter(){
+    }
     function hookMail($mail){
     }
-    function hookFromAddress($mail){
+    function hookFromAddress($from){
     }
-    function hookToAddress($mail){
+    function hookToAddress($to){
+    }
+    function hookBody($body){
+    }
+    function hookAttachment($attachment, $name, $type){
     }
 }

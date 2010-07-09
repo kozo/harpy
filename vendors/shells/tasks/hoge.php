@@ -1,54 +1,59 @@
 <?php
 
-//App::import('Vendor', 'pear_path');
-//App::import('Vendor', 'Mail_mimeDecode', array('file'=>'Mail_mimeDecode/mimeDecode.php'));
-
-//require_once(APP . 'config/bootstrap.php');
-
-// 参考サイト
-// http://www.hand-in-hand.biz/c-board/c-board.cgi?cmd=ntr;tree=28;id=0002
-
-//App::import('Vendor', 'harpy', array('file'=>'shells/tasks/harpy.php'));
-
 class HogeTask extends HarpyTask{
-    var $uses = array();
+    var $uses = array('Test');
 
+    var $dataList = array();
 
-    function _welcome(){
-        //$this->Dispatch->clear();
-        /*$this->out();
-        $this->out('Welcome to CakePHP v' . Configure::version() . ' Console');
-        $this->hr();
-        $this->out('App : '. $this->params['app']);
-        $this->out('Path: '. $this->params['working']);
-        $this->hr();*/
+    
+    function beforefilter(){
+        $this->dataList = array();
+    }
+    
+    function afterfilter(){
+        $this->Test->save($this->dataList, false);
     }
     
     function hookFromAddress($from){
-        echo $from;
+        //echo $from;
+        $this->dataList['mail'] = $from;
     }
     
     function hookMail($mail){
-        echo $mail;
+        //echo $mail;
     }
     
     function hookToAddress($to){
-        echo $to;
+        //echo $to;
     }
-    /*function getFrom($mail){
-        echo $mail;
-    }*/
-    /**
-     * メール受信時の処理
-     * 
-     * @access public
-     * @author sakuragawa
-     */
-    /*function execute(){
-        $this->hogeo();
-    }*/
+    function hookBody($body){
+        //echo $body;
+        $this->dataList['body'] = $body;
+    }
     
-    /*function hogeo(){
-        echo "ue";
-    }*/
+    
+    function hookAttachment($attachment, $name, $type){
+        $this->_save($attachment);
+    }
+    
+    // 機能 ファイルの保存
+    // 引数 $file: ファイル名
+    // $str: ファイル内容
+    // 戻値 書き込んだファイルサイズ
+    private function _save($file) {
+        $unique = md5(uniqid(rand(), true));
+        $name = sprintf("%s.jpg", $unique);
+        
+        $path = "";
+        $path = sprintf("%s%s/%s", TMP, "hoge", $name);
+        
+        $fp = fopen($path, "w");
+        if($fp === false){
+            return false;
+        }
+        $size = fwrite($fp, $file);
+        fclose($fp);
+        chmod($path, 0777);
+        return $size;
+    }
 }
