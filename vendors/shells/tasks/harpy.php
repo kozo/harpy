@@ -18,6 +18,9 @@ class HarpyTask extends Shell{
     // メールアドレス用の正規表現
     var $email_regix = "/([_\w\.\-\"]+@[_0-9a-zA-Z\.\-]+\.[a-zA-Z]+)/";
     
+    // 処理エンコード
+    var $encode = '';
+    
     // Mail_mimeDecodeのデコードの設定
     var $mailMimeDecodeParams = array(
         'include_bodies' => true,
@@ -25,6 +28,12 @@ class HarpyTask extends Shell{
         'decode_headers' => true,
         );
     
+    function startup() {
+        parent::startup();
+        
+        // 文字コード指定
+        $this->encode = Configure::read('App.encoding');
+    }
 
     function _welcome(){
         //$this->Dispatch->clear();
@@ -91,7 +100,7 @@ class HarpyTask extends Shell{
         $charset = $this->_getCharset($mail->headers[$type]);
         
         $match = array();
-        $from = mb_convert_encoding($mail->headers[$type], mb_internal_encoding(), $charset);
+        $from = mb_convert_encoding($mail->headers[$type], $this->encode, $charset);
         preg_match($this->email_regix, $from, $match);
         if (!empty($match[1])) {
             $from = $match[1];
@@ -125,7 +134,7 @@ class HarpyTask extends Shell{
                             } else { //HTML本文
                                 $ary['body'] = trim(mb_convert_encoding($part->body, mb_internal_encoding(), mb_detect_order()));
                             }*/
-                            $body = trim(mb_convert_encoding($part->body, 'UTF-8', mb_detect_order()));
+                            $body = trim(mb_convert_encoding($part->body, $this->encode, mb_detect_order()));
                             $this->hookBody($body);
                             break;
                         case "multipart": //マルチパートの中にマルチパートがある場合（MS-OutlookExpressからHTML形式で送信した場合）
@@ -137,7 +146,7 @@ class HarpyTask extends Shell{
             }
         } elseif (strtolower($mail->ctype_primary) == "text") {
             //テキスト本文のみのメール            
-            $body = trim(mb_convert_encoding($mail->body, 'UTF-8', mb_detect_order()));
+            $body = trim(mb_convert_encoding($mail->body, $this->encode, mb_detect_order()));
             $this->hookBody($body);
         }
 
@@ -158,7 +167,7 @@ class HarpyTask extends Shell{
         // 日本語ファイル名に対応するために変換をかける
         $fileName = urldecode($part->ctype_parameters['name']);
         $enc = $this->_getCharset($fileName);
-        $fileName = mb_convert_encoding($fileName, 'UTF-8', $enc);
+        $fileName = mb_convert_encoding($fileName, $this->encode, $enc);
         return $fileName;
     }
    
